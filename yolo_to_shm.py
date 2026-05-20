@@ -59,7 +59,9 @@ def parse_args():
     p.add_argument("--print-every", type=int, default=0, help="每隔N帧打印 [SHM]；0不打印")
     p.add_argument("--conf-shm", default=CONF_SHM_PATH_DEFAULT, help="动态阈值 SHM(float32 LE)")
 
-    p.set_defaults(camera=0)
+    p.add_argument("--out-width", type=int, default=0, help="SHM output width; 0 means captured width")
+    p.add_argument("--out-height", type=int, default=0, help="SHM output height; 0 means captured height")
+    p.set_defaults(camera=1)
 
     # grab queue (new)
     p.add_argument("--queue-size", type=int, default=1, help="采集队列长度（越小延迟越低）")
@@ -147,6 +149,8 @@ def validate_args(a):
         raise ValueError("--perf-warmup 不可为负")
     if a.queue_size <= 0:
         raise ValueError("--queue-size 必须为正数")
+    if a.out_width < 0 or a.out_height < 0:
+        raise ValueError("--out-width/--out-height must be >= 0")
 
 
 def clamp_u16(x: float) -> int:
@@ -381,7 +385,9 @@ def main():
             raise RuntimeError("读首帧失败")
 
         H, W = frame0.shape[:2]
-        sx, sy = W / float(a.size), H / float(a.size)
+        out_w = int(a.out_width) if int(a.out_width) > 0 else W
+        out_h = int(a.out_height) if int(a.out_height) > 0 else H
+        sx, sy = out_w / float(a.size), out_h / float(a.size)
 
         # shm + conf
         writer = ShmWriterV2(a.shm_path)
@@ -484,7 +490,7 @@ def main():
                 tag = "conf*" if changed else "conf"
                 print(
                     f"[SHM] frame={frame_id} wrote={wrote} n={len(out_dets)} mode={mode} "
-                    f"cap={cap_dev} res={W}x{H} size={a.size} {tag}={conf_thres:.2f}",
+                    f"cap={cap_dev} res={W}x{H} out={out_w}x{out_h} size={a.size} {tag}={conf_thres:.2f}",
                     flush=True
                 )
                 last_conf = conf_thres

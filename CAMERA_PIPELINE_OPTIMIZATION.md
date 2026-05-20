@@ -19,67 +19,68 @@ That means the inference producer can be replaced by C++ as long as it writes th
 
 ## Important issue
 
-Do not run two independent processes that both open `/dev/video0` unless the camera driver is proven to support it.
+The camera exposes two V4L2 nodes from the same physical sensor:
 
-The current RTSP server opens `/dev/video0` directly. If `yolo_to_shm.py` is also changed to `--camera 0`, both processes compete for the same V4L2 node. On RK3566 this often causes lower FPS, black frames, long latency, or unstable startup.
+- `/dev/video0`: main stream, used by RTSP.
+- `/dev/video1`: sub stream, used by YOLO.
+
+This is better than making YOLO pull RTSP on this board, because RTSP input had already proven unreliable and would also add decode latency. The important rule is still the same: do not make RTSP and YOLO both open `/dev/video0`.
 
 ## Recommended architecture
 
-Best FPS and stability:
+Best FPS and stability for the current Python deployment:
 
 ```text
-/dev/video0
-  -> one capture owner
-  -> tee
-     -> MPP H.265 encoder -> RTSP rtsp://<board>:8554/live
-     -> RGA resize/color convert -> RKNN inference -> same SHM output
+/dev/video0 -> MPP H.265 encoder -> RTSP rtsp://<board>:8554/live
+/dev/video1 -> RKNN inference -> same SHM output, scaled to main-stream coordinates
 ```
 
-This keeps the hardware interface unchanged (`/dev/video0`) and keeps the upper-computer interface unchanged (RTSP URL + TCP/SHM behavior), but removes duplicate camera access and extra frame copies.
+This keeps the hardware interface unchanged (`/dev/video0` and `/dev/video1`) and keeps the upper-computer interface unchanged (RTSP URL + TCP/SHM behavior), while avoiding RTSP decode in the YOLO path.
 
 ## Practical migration path
 
 1. Keep the current Python services for compatibility.
 2. Measure baseline with `journalctl -u yolo-to-shm.service -f` and the existing `[PERF]` log.
 3. Avoid camera contention first:
-   - If RTSP must own `/dev/video0`, let YOLO read `--source rtsp://127.0.0.1:8554/live` as a compatibility test.
-   - For best performance, replace both Python video processes with one C++ GStreamer/RKNN process.
-4. Move producer to C++:
+   - RTSP owns `/dev/video0`.
+   - YOLO owns `/dev/video1`.
+   - Use `--out-width 1920 --out-height 1080` when YOLO captures a lower-resolution sub stream, so SHM boxes still match the main RTSP picture.
+4. For best performance later, replace both Python video processes with one C++ GStreamer/RKNN process.
+5. Move producer to C++:
    - V4L2/GStreamer capture in NV12.
    - Hardware resize/color conversion with RGA, not `cv2.resize` + `cv2.cvtColor`.
    - RKNN C API inference.
    - Existing C++ YOLOv8 postprocess logic reused directly, without pybind overhead.
    - Same `/dev/shm/yolo_person_boxes` writer.
-5. Keep `tcp_roi_service` unchanged unless later you want to also port TCP/GPIO to C++.
+6. Keep `tcp_roi_service` unchanged unless later you want to also port TCP/GPIO to C++.
 
 ## Fast settings to try now
 
-The checked-in systemd services now use the safer compatibility layout:
+The checked-in systemd services now use the dual-node layout:
 
 ```text
-/dev/video0 -> rtsp-h265.service -> rtsp://127.0.0.1:8554/live -> yolo-to-shm.service
+/dev/video0 -> rtsp-h265.service -> rtsp://<board>:8554/live
+/dev/video1 -> yolo-to-shm.service -> /dev/shm/yolo_person_boxes
 ```
 
-This keeps `/dev/video0` as the hardware input and keeps the upper-computer RTSP/TCP/SHM interfaces unchanged, while avoiding two independent processes opening the camera node at the same time.
+This keeps the upper-computer RTSP/TCP/SHM interfaces unchanged and avoids the failed RTSP-to-YOLO path.
 
 For lower latency in the current Python producer:
 
 ```bash
 /usr/local/bin/run_py310 /home/radxa/Security_monitoring/yolo_to_shm.py \
-  --source /dev/video0 \
+  --camera 1 \
   --width 1280 --height 720 --fps 30 \
+  --out-width 1920 --out-height 1080 \
   --queue-size 1 --queue-drop-old \
   --size 640 --use-cpp-pp
 ```
 
-If RTSP is already using `/dev/video0`, do not use the command above at the same time. Use this compatibility mode instead:
+If `/dev/video1` cannot be opened, first confirm the board really exposes the camera sub stream there with:
 
 ```bash
-/usr/local/bin/run_py310 /home/radxa/Security_monitoring/yolo_to_shm.py \
-  --source rtsp://127.0.0.1:8554/live \
-  --width 0 --height 0 --fps 0 \
-  --queue-size 1 --queue-drop-old \
-  --size 640 --use-cpp-pp
+v4l2-ctl --list-devices
+v4l2-ctl -d /dev/video1 --list-formats-ext
 ```
 
-The RTSP-read mode avoids V4L2 contention but adds H.265 decode cost, so it is a compatibility fix, not the final highest-FPS design.
+On this board, YOLO pulling RTSP is not the preferred path because it had already failed in testing and would add decode latency even if it worked.
