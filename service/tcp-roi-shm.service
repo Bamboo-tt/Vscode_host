@@ -1,0 +1,27 @@
+[Unit]
+Description=TCP ROI Server (tcp_roi_service)
+After=network-online.target yolo-to-shm.service
+Wants=network-online.target
+
+# 限制频繁重启（正确位置在 [Unit]）
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=root
+Group=root
+SupplementaryGroups=video
+UMask=0000
+WorkingDirectory=/home/radxa/Security_monitoring
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/usr/local/bin/run_py310 /home/radxa/Security_monitoring/tcp_roi_service/main.py
+
+Restart=on-failure
+RestartSec=2
+
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

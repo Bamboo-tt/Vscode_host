@@ -1,0 +1,13 @@
+.tools/
+__pycache__/
+*.py[cod]
+*.pyo
+
+.vscode/*
+!.vscode/settings.json
+
+*.log
+*.tmp
+*.bak
+*.swp
+

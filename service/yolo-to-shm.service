@@ -1,0 +1,50 @@
+# ============================================================
+# yolo-to-shm.service（简明注释版）
+# 作用：启动 YOLO 推理进程（Producer），把检测结果写入共享内存 /dev/shm
+# 依赖：rtsp-h265.service（先启动它）
+# 输出：
+#   - /dev/shm/yolo_person_boxes  检测框数据（给 ROI/TCP 服务读取）
+#   - /dev/shm/yolo_conf_thr      动态阈值（由 ROI/TCP 服务写入，Producer 读取）
+# ============================================================
+
+[Unit]
+Description=YOLO Producer to SHM (yolo_to_shm.py)
+After=rtsp-h265.service
+Requires=rtsp-h265.service
+
+[Service]
+# systemd 直接托管前台进程
+Type=simple
+
+# 用 radxa 用户运行，并加入 video 组以访问摄像头
+User=radxa
+Group=radxa
+SupplementaryGroups=video
+
+# 放宽文件权限掩码，避免 /dev/shm 文件权限导致读写失败
+UMask=0000
+
+# 程序工作目录（相对路径基于此）
+WorkingDirectory=/home/radxa/Security_monitoring
+
+# 让 Python 日志实时输出到 journalctl
+Environment=PYTHONUNBUFFERED=1
+
+# 启动前清理旧 SHM（升级 SHM 布局后避免旧尺寸残留）
+ExecStartPre=-/bin/rm -f /dev/shm/yolo_person_boxes /dev/shm/yolo_conf_thr
+
+# 启动 YOLO：摄像头=1，分辨率=1920x1080，只输出 person，写入 SHM，并每 30 帧打印一次
+ExecStart=/usr/local/bin/run_py310 /home/radxa/Security_monitoring/yolo_to_shm.py
+
+
+# 崩溃自动重启
+Restart=always
+RestartSec=2
+StartLimitIntervalSec=0
+
+# 停止时用 SIGINT 让程序有机会优雅退出
+KillSignal=SIGINT
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

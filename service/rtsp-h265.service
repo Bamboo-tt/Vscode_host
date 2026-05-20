@@ -1,0 +1,54 @@
+# /etc/systemd/system/rtsp-h265.service
+# 作用：开机自启 RTSP H265 推流服务（把相机画面编码成 H265 并通过 RTSP 提供给上位机/播放器）
+# 依赖：network-online.target（确保网络已就绪后再启动，避免 RTSP 端口初始化失败）
+
+[Unit]
+Description=RTSP H265 Server (rtsp_server_h265.py)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# 用 radxa 用户运行；加入 video 组以访问摄像头设备 /dev/video*
+User=radxa
+Group=radxa
+SupplementaryGroups=video
+
+# 程序运行目录（脚本里若用相对路径：配置/日志/模型路径等，以此为基准）
+WorkingDirectory=/home/radxa/Security_monitoring
+
+# 让 Python 输出不缓冲，日志实时进入 journalctl，排查推流问题更直观
+Environment=PYTHONUNBUFFERED=1
+
+# keepalive：用于“连接保活/断线自愈”（由脚本读取这些环境变量）
+# RTSP_KEEPALIVE=1：开启保活逻辑
+# RTSP_KEEPALIVE_PROTO=tcp：保活用 TCP（更稳，避免 UDP 丢包导致误判断线）
+# RTSP_KEEPALIVE_RESTART_SEC=5：检测到异常后等待 5 秒重启/拉起推流
+Environment=RTSP_KEEPALIVE=1
+Environment=RTSP_KEEPALIVE_PROTO=tcp
+Environment=RTSP_KEEPALIVE_RESTART_SEC=5
+
+# 启动 RTSP H265 服务（实际相机/分辨率/码率/端口等由脚本参数或脚本内部配置决定）
+ExecStart=/usr/local/bin/run_py310 /home/radxa/Security_monitoring/rtsp_server_h265.py
+
+# 进程退出就自动重启（推流服务必须常驻）
+Restart=always
+
+# 重启前等待 2 秒，避免异常时疯狂重启刷爆日志/CPU
+RestartSec=2
+
+# 关闭“启动失败次数限制窗口”，避免短时间多次重启后被 systemd 彻底停掉
+StartLimitIntervalSec=0
+
+# 停止服务时发 SIGINT，让脚本优雅退出（释放摄像头/编码器/端口）
+KillSignal=SIGINT
+
+# 给脚本最多 10 秒完成退出，超时则 systemd 强制终止
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
+
+
+

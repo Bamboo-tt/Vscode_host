@@ -1,0 +1,14 @@
+{
+  "terminal.integrated.defaultProfile.windows": "Command Prompt (yolov8_py310)",
+  "terminal.integrated.profiles.windows": {
+    "Command Prompt (yolov8_py310)": {
+      "path": "C:\\Windows\\System32\\cmd.exe",
+      "args": [
+        "/K",
+        "D:\\WorkSpace\\miniconda\\Scripts\\activate.bat D:\\WorkSpace\\miniconda\\envs\\yolov8_py310"
+      ]
+    }
+  },
+  "python.defaultInterpreterPath": "D:\\WorkSpace\\miniconda\\envs\\yolov8_py310\\python.exe",
+  "python.terminal.activateEnvironment": true
+}
