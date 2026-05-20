@@ -59,6 +59,8 @@ def parse_args():
     p.add_argument("--print-every", type=int, default=0, help="每隔N帧打印 [SHM]；0不打印")
     p.add_argument("--conf-shm", default=CONF_SHM_PATH_DEFAULT, help="动态阈值 SHM(float32 LE)")
 
+    p.set_defaults(camera=0)
+
     # grab queue (new)
     p.add_argument("--queue-size", type=int, default=1, help="采集队列长度（越小延迟越低）")
     gq = p.add_mutually_exclusive_group()
@@ -242,7 +244,17 @@ class ConfShmReader:
             return None
 
 
+def _configure_low_latency_source(dev: str) -> None:
+    if not str(dev).lower().startswith("rtsp://"):
+        return
+    os.environ.setdefault(
+        "OPENCV_FFMPEG_CAPTURE_OPTIONS",
+        "rtsp_transport;tcp|max_delay;0|fflags;nobuffer|flags;low_delay",
+    )
+
+
 def _open_capture(dev: str) -> cv2.VideoCapture:
+    _configure_low_latency_source(dev)
     if str(dev).startswith("/dev/video"):
         cap = cv2.VideoCapture(dev, cv2.CAP_V4L2)
         if cap.isOpened():

@@ -54,6 +54,14 @@ This keeps the hardware interface unchanged (`/dev/video0`) and keeps the upper-
 
 ## Fast settings to try now
 
+The checked-in systemd services now use the safer compatibility layout:
+
+```text
+/dev/video0 -> rtsp-h265.service -> rtsp://127.0.0.1:8554/live -> yolo-to-shm.service
+```
+
+This keeps `/dev/video0` as the hardware input and keeps the upper-computer RTSP/TCP/SHM interfaces unchanged, while avoiding two independent processes opening the camera node at the same time.
+
 For lower latency in the current Python producer:
 
 ```bash

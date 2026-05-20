@@ -30,7 +30,7 @@ Environment=RTSP_KEEPALIVE_PROTO=tcp
 Environment=RTSP_KEEPALIVE_RESTART_SEC=5
 
 # 启动 RTSP H265 服务（实际相机/分辨率/码率/端口等由脚本参数或脚本内部配置决定）
-ExecStart=/usr/local/bin/run_py310 /home/radxa/Security_monitoring/rtsp_server_h265.py
+ExecStart=/usr/local/bin/run_py310 /home/radxa/Security_monitoring/rtsp_server_h265.py --device /dev/video0 --width 1920 --height 1080 --fps 30 --pixfmt NV12 --bitrate 6000000 --gop 30 --io-mode 4 --mount /live
 
 # 进程退出就自动重启（推流服务必须常驻）
 Restart=always
@@ -49,6 +49,5 @@ TimeoutStopSec=10
 
 [Install]
 WantedBy=multi-user.target
-
 
 

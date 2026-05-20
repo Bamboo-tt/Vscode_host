@@ -33,8 +33,8 @@ Environment=PYTHONUNBUFFERED=1
 # 启动前清理旧 SHM（升级 SHM 布局后避免旧尺寸残留）
 ExecStartPre=-/bin/rm -f /dev/shm/yolo_person_boxes /dev/shm/yolo_conf_thr
 
-# 启动 YOLO：摄像头=1，分辨率=1920x1080，只输出 person，写入 SHM，并每 30 帧打印一次
-ExecStart=/usr/local/bin/run_py310 /home/radxa/Security_monitoring/yolo_to_shm.py
+# 启动 YOLO：读取本机 RTSP，避免和推流服务同时打开 /dev/video0；只输出 person 并写入 SHM
+ExecStart=/usr/local/bin/run_py310 /home/radxa/Security_monitoring/yolo_to_shm.py --source rtsp://127.0.0.1:8554/live --width 0 --height 0 --fps 0 --queue-size 1 --queue-drop-old --size 640 --use-cpp-pp --perf-every 30 --perf-warmup 30
 
 
 # 崩溃自动重启

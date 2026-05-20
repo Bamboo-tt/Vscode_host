@@ -3,11 +3,10 @@ __pycache__/
 *.py[cod]
 *.pyo
 
-.vscode/*
-!.vscode/settings.json
+.vscode/
+**/.env
 
 *.log
 *.tmp
 *.bak
 *.swp
-
